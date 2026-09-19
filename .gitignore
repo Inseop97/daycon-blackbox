@@ -1,0 +1,32 @@
+# 데이콘 제공 원본 샘플 데이터 (Baseline/data/) — 대회 페이지에서 재다운로드 가능
+data/
+
+# 각 Stage에서 생성한 학습용 데이터셋 (build_dataset.py로 재생성 가능)
+stage1_work/data/
+stage2_evasion_work/data/
+stage3_work/data/
+stage3_work/data_stage3_comma2k19.tar
+
+# 실험 이력 체크포인트(용량 큼, 최종 모델은 model/ 에만 남김)
+model_backup/
+
+# build_submit_zip.py 산출물(재생성 가능, model/+inference.py의 중복)
+submit.zip
+submit/
+
+# ultralytics가 자동 다운로드하는 사전학습 가중치(재다운로드 가능) — 단,
+# model/stage2/yolo11n.pt 는 제출용 필수 자산이라 그대로 추적(제외하지 않음)
+stage2_evasion_work/yolo11n.pt
+
+# 로그
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+
+# OS
+.DS_Store

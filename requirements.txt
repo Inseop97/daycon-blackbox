@@ -1,0 +1,11 @@
+torch==2.8.0
+torchvision==0.23.0
+numpy==1.26.4
+pandas==2.2.2
+opencv-python==4.10.0.84
+tqdm==4.66.5
+
+# Stage2 evasion_space가 box_fusion(YOLOP 세그멘테이션 특징 포함) 체크포인트일 때만 필요.
+# ultralytics/yacs는 평가서버에 이미 설치돼 있어 생략 — prefetch_generator만 없음(순수
+# 파이썬 소형 패키지, model/stage2/yolop_code/lib/utils/utils.py가 import함).
+prefetch_generator

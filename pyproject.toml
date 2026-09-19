@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daycon-blackbox-pipeline"
+version = "0.1.0"
+description = "DACON 블랙박스 영상 기반 지능형 고의사고 분석 Stage1/2/3 학습 파이프라인"
+requires-python = ">=3.10"
+dependencies = [
+    "torch==2.8.0",
+    "torchvision==0.23.0",
+    "opencv-python-headless==4.10.0.84",
+    "numpy==1.26.4",
+    "pandas==2.2.2",
+    "pillow",
+    "scikit-learn==1.5.2",
+]
+
+[project.scripts]
+daycon-train = "daycon_pipeline.cli:main"
+
+[tool.setuptools]
+packages = ["daycon_pipeline", "stage1_work", "stage2_evasion_work", "stage3_work"]

@@ -1,0 +1,17 @@
+torch==2.8.0
+torchvision==0.23.0
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+scikit-learn==1.5.2
+
+# STAGE3_ARCH=x3d 옵션(train.py)에 필요 — GPU 서버에서만 사용
+pytorchvideo
+fvcore
+iopath
+yacs
+
+# stage1_work의 STAGE1_ARCH=xception 옵션에 필요
+timm
+
+# stage2_evasion_work의 extract_box_features.py / STAGE2_ARCH=box_fusion 옵션에 필요
+ultralytics
