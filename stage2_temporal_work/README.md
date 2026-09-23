@@ -77,20 +77,30 @@ split_manifest.csv로 저장된다.
 
 ## 제출 모델 설치
 
-검증 결과를 확인한 다음에만 체크포인트를 제출 경로로 복사한다.
+검증 결과를 확인한 다음 한 명령으로 체크포인트를 설치하고 전체 제출 파일을 만든다.
 
 ```bash
-cp /data/daycon-stage2/runs/dinov2_tcn_v1/best.pt model/stage2/temporal_best.pt
-python build_submit_zip.py
-ls -lh model/stage2/temporal_best.pt submit.zip
+python -m stage2_temporal_work.finalize_submit \
+  --checkpoint /data/daycon-stage2/runs/dinov2_tcn_v1/best.pt \
+  --artifact-dir /data/daycon-stage2/artifacts
+```
+
+이 명령은 기존 Stage 1/2/3 가중치와 YOLOP 코드에 temporal_best.pt를 추가한 뒤,
+저장소 루트의 build_submit_zip.py로 전체 submit.zip을 다시 만든다. 회수할 파일은
+다음 폴더에 모인다.
+
+```text
+/data/daycon-stage2/artifacts/
+├── submit.zip
+├── temporal_best.pt
+└── SHA256SUMS.txt
 ```
 
 inference.py는 temporal_best.pt가 있으면 새 모델을 사용하고, 없으면 기존 Stage 2
-방식으로 폴백한다. temporal_best.pt는 Git에서 제외되므로 서버에서 만든
-submit.zip을 직접 다운로드하거나 체크포인트를 별도로 회수한다.
+방식으로 폴백한다. temporal_best.pt는 Git에서 제외된다.
 
 ```bash
-rsync -avhP USER@GPU_SERVER:/path/to/daycon-blackbox/model/stage2/temporal_best.pt ./model/stage2/
+rsync -avhP USER@GPU_SERVER:/data/daycon-stage2/artifacts/ ./gpu_stage2_artifacts/
 ```
 
 validation split은 최초 실행 때 저장되고 이후 재사용된다. test 데이터는 이
