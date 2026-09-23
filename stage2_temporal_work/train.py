@@ -26,7 +26,7 @@ from .model import BACKBONE_NAME, FRAME_TRANSFORM, IMAGE_SIZE, Stage2TemporalMod
 def parse_args():
     p = argparse.ArgumentParser(description="Train Stage2 DINOv2 + TCN model")
     p.add_argument("--labels", type=Path, required=True)
-    p.add_argument("--nexar-master", type=Path, required=True)
+    p.add_argument("--nexar-master", type=Path)
     p.add_argument("--nexar-dir", type=Path, required=True)
     p.add_argument("--ccd-dir", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, default=Path("runs/stage2_temporal"))

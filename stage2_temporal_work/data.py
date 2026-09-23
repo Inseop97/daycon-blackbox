@@ -42,12 +42,20 @@ def video_info(path: Path) -> tuple[float, int, float]:
 
 def load_labels(
     labels_path: Path,
-    nexar_master_path: Path,
+    nexar_master_path: Path | None,
     nexar_dir: Path,
     ccd_dir: Path,
 ) -> pd.DataFrame:
     df = pd.read_csv(labels_path, dtype={"video_id": str, "source": str})
-    nexar_master = pd.read_csv(nexar_master_path, dtype={"video_id": str})
+    canonical = "relative_path" in df.columns and "filename" in df.columns
+    nexar_master = None
+    if not canonical:
+        if nexar_master_path is None:
+            raise ValueError(
+                "--nexar-master is required for the original manual label CSV; "
+                "use stage2_gpu_data/labels/train_labels.csv to run without it"
+            )
+        nexar_master = pd.read_csv(nexar_master_path, dtype={"video_id": str})
     required = {"video_id", "source", "collision_time", "entry_time", "entry_side", "evasion_space"}
     missing = required - set(df.columns)
     if missing:
@@ -60,7 +68,7 @@ def load_labels(
     rows = []
     for _, original_row in df.iterrows():
         row = original_row.copy()
-        if str(row.source).lower() == "nexar":
+        if str(row.source).lower() == "nexar" and not canonical:
             label_index = int(str(row.video_id))
             if label_index < 0 or label_index >= len(nexar_master):
                 raise ValueError(f"Nexar label index out of range: {row.video_id}")

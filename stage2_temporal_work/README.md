@@ -28,8 +28,9 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 ```text
 /data/daycon-stage2/
 ├── labels/
-│   ├── manual_time_labels.csv
-│   └── stage2_labels_master.csv
+│   ├── train_labels.csv
+│   ├── rejected_rows.csv
+│   └── SHA256SUMS.txt
 └── videos/
     ├── nexar/*.mp4
     └── ccd/*.mp4
@@ -39,8 +40,7 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 
 ```bash
 python -m stage2_temporal_work.train \
-  --labels /data/daycon-stage2/labels/manual_time_labels.csv \
-  --nexar-master /data/daycon-stage2/labels/stage2_labels_master.csv \
+  --labels /data/daycon-stage2/labels/train_labels.csv \
   --nexar-dir /data/daycon-stage2/videos/nexar \
   --ccd-dir /data/daycon-stage2/videos/ccd \
   --cache-dir /data/daycon-stage2/cache/dinov2_5fps_smoke \
@@ -55,8 +55,7 @@ python -m stage2_temporal_work.train \
 
 ```bash
 python -m stage2_temporal_work.train \
-  --labels /data/daycon-stage2/labels/manual_time_labels.csv \
-  --nexar-master /data/daycon-stage2/labels/stage2_labels_master.csv \
+  --labels /data/daycon-stage2/labels/train_labels.csv \
   --nexar-dir /data/daycon-stage2/videos/nexar \
   --ccd-dir /data/daycon-stage2/videos/ccd \
   --cache-dir /data/daycon-stage2/cache/dinov2_5fps \
