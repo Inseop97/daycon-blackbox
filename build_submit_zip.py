@@ -49,6 +49,9 @@ def main():
     if missing_assets:
         raise RuntimeError(f"필수 모델 자산 누락: {missing_assets}")
     print("필수 모델 자산 확인 완료:", REQUIRED_FILES)
+    temporal_checkpoint = ROOT / "model/stage2/temporal_best.pt"
+    if temporal_checkpoint.is_file():
+        print("Stage2 temporal checkpoint 포함:", temporal_checkpoint)
 
     if SUBMIT_PATH.exists():
         SUBMIT_PATH.unlink()

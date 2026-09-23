@@ -20,6 +20,7 @@ from PIL import Image
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torchvision.models import efficientnet_b0
+from torchvision.transforms import v2
 
 VIDEO_EXT = {".mp4", ".avi", ".mov", ".mkv", ".m4v", ".3gp", ".3gpp", ".wmv"}
 S3_IMG_SIZE = 224  # EfficientNet-B0 사전학습 기준 (stage3_work/train.py와 동일)
@@ -197,6 +198,13 @@ S2_DEFAULT_FPS = 10.0  # fps를 못 구하거나 비정상일 때 폴백(CCD/com
 S2_IMG_SIZE = 224
 S2_MEAN = torch.tensor([0.485, 0.456, 0.406])[:, None, None]
 S2_STD = torch.tensor([0.229, 0.224, 0.225])[:, None, None]
+S2_TEMPORAL_TRANSFORM = v2.Compose([
+    v2.Resize(256, antialias=True),
+    v2.CenterCrop(224),
+    v2.ToImage(),
+    v2.ToDtype(torch.float32, scale=True),
+    v2.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+])
 S2_BOX_FEATURE_NAMES = [
     "n_vehicles", "largest_area_frac", "largest_cx", "largest_cy",
     "coverage_frac", "gap_left_frac", "gap_right_frac",
@@ -520,6 +528,104 @@ class _Stage2BoxFusion(nn.Module):
         return self.classifier(torch.cat([self.backbone(x), self.box_mlp(box)], dim=1))
 
 
+class _Stage2ResidualTCNBlock(nn.Module):
+    def __init__(self, channels: int, dilation: int, dropout: float):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv1d(channels, channels, 3, padding=dilation, dilation=dilation),
+            nn.BatchNorm1d(channels),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Conv1d(channels, channels, 3, padding=dilation, dilation=dilation),
+            nn.BatchNorm1d(channels),
+            nn.GELU(),
+            nn.Dropout(dropout),
+        )
+
+    def forward(self, x):
+        return x + self.net(x)
+
+
+class _Stage2TemporalModel(nn.Module):
+    def __init__(self, feature_dim: int, hidden_dim: int = 256, dropout: float = 0.2):
+        super().__init__()
+        self.input_projection = nn.Sequential(
+            nn.Linear(feature_dim, hidden_dim), nn.LayerNorm(hidden_dim), nn.GELU()
+        )
+        self.tcn = nn.Sequential(
+            _Stage2ResidualTCNBlock(hidden_dim, 1, dropout),
+            _Stage2ResidualTCNBlock(hidden_dim, 2, dropout),
+            _Stage2ResidualTCNBlock(hidden_dim, 4, dropout),
+            _Stage2ResidualTCNBlock(hidden_dim, 8, dropout),
+        )
+        self.collision_head = nn.Conv1d(hidden_dim, 1, 1)
+        self.entry_head = nn.Conv1d(hidden_dim, 1, 1)
+        self.side_head = nn.Linear(hidden_dim, 2)
+        self.evasion_head = nn.Linear(hidden_dim, 2)
+
+    def forward(self, features):
+        hidden = self.tcn(self.input_projection(features).transpose(1, 2)).transpose(1, 2)
+        collision_logits = self.collision_head(hidden.transpose(1, 2)).squeeze(1)
+        entry_logits = self.entry_head(hidden.transpose(1, 2)).squeeze(1)
+        collision_idx = collision_logits.argmax(1)
+        positions = torch.arange(entry_logits.shape[1], device=entry_logits.device)[None]
+        entry_idx = entry_logits.masked_fill(positions > collision_idx[:, None], -1e9).argmax(1)
+        batch = torch.arange(features.shape[0], device=features.device)
+        return (
+            collision_idx,
+            entry_idx,
+            self.side_head(hidden[batch, entry_idx]),
+            self.evasion_head(hidden[batch, collision_idx]),
+        )
+
+
+def _s2_temporal_preprocess(frame_bgr):
+    rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    return S2_TEMPORAL_TRANSFORM(Image.fromarray(rgb))
+
+
+def _load_stage2_temporal(model_dir, device):
+    import timm
+
+    checkpoint = torch.load(model_dir / "temporal_best.pt", map_location="cpu", weights_only=False)
+    backbone = timm.create_model(
+        checkpoint["backbone_name"],
+        pretrained=False,
+        num_classes=0,
+        img_size=int(checkpoint.get("image_size", 224)),
+    )
+    backbone.load_state_dict(checkpoint["backbone"])
+    temporal = _Stage2TemporalModel(
+        int(checkpoint["feature_dim"]), int(checkpoint.get("hidden_dim", 256))
+    )
+    temporal.load_state_dict(checkpoint["temporal_model"])
+    return backbone.to(device).eval(), temporal.to(device).eval(), checkpoint
+
+
+def _predict_stage2_temporal(frames, frame_numbers, fps, backbone, temporal, checkpoint, device):
+    target_fps = float(checkpoint.get("target_fps", 5.0))
+    stride = max(1, int(round(fps / target_fps)))
+    sampled_indices = list(range(0, len(frames), stride))
+    feature_chunks = []
+    batch_size = 64
+    for start in range(0, len(sampled_indices), batch_size):
+        indices = sampled_indices[start : start + batch_size]
+        x = torch.stack([_s2_temporal_preprocess(frames[i]) for i in indices]).to(device)
+        with torch.autocast(device_type="cuda", dtype=torch.float16):
+            feature_chunks.append(backbone(x).float())
+    features = torch.cat(feature_chunks).unsqueeze(0)
+    collision_pos, entry_pos, side_logits, evasion_logits = temporal(features)
+    collision_idx = sampled_indices[int(collision_pos.item())]
+    entry_idx = sampled_indices[int(entry_pos.item())]
+    side_labels = checkpoint.get("side_labels", ["LEFT", "RIGHT"])
+    return {
+        "collision_frame": frame_numbers[collision_idx],
+        "entry_frame": frame_numbers[entry_idx],
+        "entry_side": side_labels[int(side_logits.argmax(1).item())],
+        "evasion_space": int(evasion_logits.argmax(1).item()),
+    }
+
+
 def _build_stage2_evasion_model(arch: str, num_labels: int) -> nn.Module:
     if arch == "box_fusion":
         return _Stage2BoxFusion(num_labels)
@@ -578,6 +684,23 @@ def _s2_samples(data_dir):
 def predict_stage2(data_dir, model_dir):
     device = _device()
     model_dir = Path(model_dir)
+
+    temporal_path = model_dir / "temporal_best.pt"
+    if temporal_path.is_file():
+        backbone, temporal, checkpoint = _load_stage2_temporal(model_dir, device)
+        rows = []
+        with torch.inference_mode():
+            for sample_id, frames, frame_numbers, fps in _s2_samples(data_dir):
+                if not frames:
+                    rows.append({"ID": sample_id, "collision_frame": 0, "entry_frame": 0, "evasion_space": 0, "entry_side": "LEFT"})
+                    continue
+                prediction = _predict_stage2_temporal(
+                    frames, frame_numbers, fps, backbone, temporal, checkpoint, device
+                )
+                rows.append({"ID": sample_id, **prediction})
+        del backbone, temporal
+        torch.cuda.empty_cache()
+        return pd.DataFrame(rows, columns=["ID", "collision_frame", "entry_frame", "evasion_space", "entry_side"])
 
     checkpoint = torch.load(model_dir / "evasion_space" / "best.pt", map_location="cpu", weights_only=False)
     labels = checkpoint["labels"]

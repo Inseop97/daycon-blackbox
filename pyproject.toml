@@ -15,10 +15,11 @@ dependencies = [
     "pandas==2.2.2",
     "pillow",
     "scikit-learn==1.5.2",
+    "timm==1.0.19",
 ]
 
 [project.scripts]
 daycon-train = "daycon_pipeline.cli:main"
 
 [tool.setuptools]
-packages = ["daycon_pipeline", "stage1_work", "stage2_evasion_work", "stage3_work"]
+packages = ["daycon_pipeline", "stage1_work", "stage2_evasion_work", "stage2_temporal_work", "stage3_work"]

@@ -6,6 +6,9 @@ stage1_work/data/
 stage2_evasion_work/data/
 stage3_work/data/
 stage3_work/data_stage3_comma2k19.tar
+cache/
+runs/
+model/stage2/temporal_best.pt
 
 # 실험 이력 체크포인트(용량 큼, 최종 모델은 model/ 에만 남김)
 model_backup/

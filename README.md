@@ -21,6 +21,10 @@ EfficientNet-B0(2D CNN, ImageNet 사전학습)로 통일해 실험 속도를 확
 
 세부 항목 4개, 방식이 각각 다릅니다.
 
+수작업 Nexar/CCD 라벨을 함께 학습하는 GPU 파일럿은
+`stage2_temporal_work/`에 있다. frozen DINOv2 ViT-S/14 특징을 캐시한 뒤
+TCN으로 collision/entry 시점과 side/evasion 분류를 함께 학습한다.
+
 - **collision_frame**: 모델 없이 규칙 기반. CCD `binlabels`(50프레임 이진 라벨)
   전환 시점을 라벨 proxy로 쓰고, 프레임간 픽셀 차이(motion-spike)로 교차검증해
   +3~4프레임 보정.
